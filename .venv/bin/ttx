@@ -1,4 +1,6 @@
-#!/Users/gerard/Desktop/Projects/Streamlit/.venv/bin/python3.11
+#!/bin/sh
+'''exec' "/Users/gerard/Desktop/Projects/Streamlit copy 2/.venv/bin/python3.11" "$0" "$@"
+' '''
 # -*- coding: utf-8 -*-
 import re
 import sys
