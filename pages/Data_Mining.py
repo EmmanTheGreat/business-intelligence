@@ -12,7 +12,7 @@ from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import OneHotEncoder
 from sklearn.pipeline import Pipeline
 from sklearn.metrics import mean_squared_error
-
+#fix module
 
 # Configure the page
 st.set_page_config(layout='wide', initial_sidebar_state='expanded')
