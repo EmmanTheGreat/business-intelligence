@@ -52,12 +52,21 @@ scaled_data = scaler.fit_transform(customer_data[['Sales']])
 kmeans = KMeans(n_clusters=num_clusters, random_state=42)
 customer_data['Cluster'] = kmeans.fit_predict(scaled_data)
 
-# Displaying K-Means cluster centers
-st.markdown("### K-Means Cluster Centers")
-st.write(kmeans.cluster_centers_)
+# Displaying K-Means cluster centers horizontally
+st.markdown("### K-Means Clustering")
+
+cluster_centers = kmeans.cluster_centers_
+
+# Create a column for each cluster center
+columns = st.columns(len(cluster_centers))
+
+for idx, col in enumerate(columns):
+    with col:
+        st.markdown(f"**Cluster {idx} Center**")
+        st.write(cluster_centers[idx])
 
 # Visualize the clusters using a scatter plot
-st.markdown("### Customer Segmentation by Sales")
+st.markdown("### Customer Segmentation by Sales with Scatter Plot")
 fig, ax = plt.subplots(figsize=(10, 6))
 
 sns.scatterplot(data=customer_data, x=customer_data.index, y='Sales', hue='Cluster', palette='viridis', ax=ax)
@@ -65,17 +74,25 @@ sns.scatterplot(data=customer_data, x=customer_data.index, y='Sales', hue='Clust
 # Adding labels and title
 ax.set_xlabel('Customer Index')
 ax.set_ylabel('Total Sales')
-ax.set_title('Customer Segmentation by Sales')
+ax.set_title(f'Scatter Plot (Clusters: {num_clusters})')
 
 # Display the plot in Streamlit
 st.pyplot(fig)
 
 # Show cluster details
 st.markdown("### Cluster Details")
-for cluster_num in range(num_clusters):
-    st.write(f"**Cluster {cluster_num}:**")
-    cluster = customer_data[customer_data['Cluster'] == cluster_num]
-    st.write(cluster[['Customer ID','Sales']].head())
+
+columns_per_row = 3  # Number of columns per row
+cluster_columns = st.columns(columns_per_row)
+
+# Loop through each cluster and display details
+for idx, cluster_num in enumerate(range(num_clusters)):
+    # Select the column based on the current index
+    column = cluster_columns[idx % columns_per_row]
+    with column:
+        st.markdown(f"**Cluster {cluster_num}:**")
+        cluster = customer_data[customer_data['Cluster'] == cluster_num]
+        st.write(cluster[['Customer ID', 'Sales']].head())
 
 # Preprocess the dataset
 df['Order Date'] = pd.to_datetime(df['Order Date'])  # Convert to datetime
@@ -95,10 +112,8 @@ st.title("Sales Prediction with Linear Regression")
 # User input for test size
 test_size = st.slider('Select Test Size (%)', min_value=10, max_value=90, value=20, step=5) / 100
 
-# User input for features (for example, you can add more features for a more advanced model)
-features = st.multiselect('Select Features for Regression', ['Year', 'Month'], default=['Year', 'Month'])
-
-# Recompute X based on selected features
+# Use fixed features (Year and Month) for regression
+features = ['Year', 'Month']
 X = monthly_sales[features]
 
 # Split into training and testing sets
@@ -130,92 +145,88 @@ ax.legend()
 # Display the plot in Streamlit
 st.pyplot(fig)
 
-# File uploader
-uploaded_file = st.file_uploader("Upload your CSV file", type=["csv"])
 
-if uploaded_file:
-    # Load the dataset
-    df = pd.read_csv(uploaded_file)
+# Strip whitespace from column names
+df.columns = df.columns.str.strip()
 
-    # Strip whitespace from column names
-    df.columns = df.columns.str.strip()
+# Display dataset sample
+st.write("Sample of the dataset:")
+st.write(df.head())
 
-    # Display dataset sample
-    st.write("Sample of the uploaded dataset:")
-    st.write(df.head())
+# Streamlit UI elements for interactivity
+st.title("Sales Prediction with Random Forest")
 
-    # Feature and target selection
-    st.sidebar.header("Configuration")
-    features = st.sidebar.multiselect(
-        "Select Features for Prediction",
-        options=df.columns,
-        default=["Category", "Ship Mode", "Region"]  # Default feature columns
+# Sidebar Configuration
+st.sidebar.header("Configuration")
+
+# Feature and target selection
+features = st.sidebar.multiselect(
+    "Select Features for Prediction",
+    options=df.columns,
+    default=["Category", "Ship Mode", "Region"]  # Default feature columns
+)
+target = st.sidebar.selectbox(
+    "Select Target Variable",
+    options=df.columns,
+    index=list(df.columns).index("Sales")  # Default target column
+)
+
+if features and target:
+    # Prepare data for training
+    X = df[features]
+    y = df[target]
+
+    # Filter for categorical features to apply OneHotEncoding
+    categorical_features = [col for col in features if df[col].dtype == 'object']
+
+    # Preprocessor for categorical features
+    preprocessor = ColumnTransformer(
+        transformers=[
+            ('cat', OneHotEncoder(handle_unknown='ignore'), categorical_features)
+        ],
+        remainder='passthrough'  # Leave numerical features as is
     )
-    target = st.sidebar.selectbox(
-        "Select Target Variable",
-        options=df.columns,
-        index=list(df.columns).index("Sales")  # Default target column
-    )
 
-    if features and target:
-        # Prepare data for training
-        X = df[features]
-        y = df[target]
+    # Train-test split
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-        # Filter for categorical features to apply OneHotEncoding
-        categorical_features = [col for col in features if df[col].dtype == 'object']
+    # Build the pipeline
+    model = Pipeline(steps=[
+        ('preprocessor', preprocessor),
+        ('regressor', RandomForestRegressor(n_estimators=100, random_state=42))
+    ])
 
-        # Preprocessor for categorical features
-        preprocessor = ColumnTransformer(
-            transformers=[
-                ('cat', OneHotEncoder(handle_unknown='ignore'), categorical_features)
-            ],
-            remainder='passthrough'  # Leave numerical features as is
-        )
+    # Train the model
+    st.write("Training the model...")
+    model.fit(X_train, y_train)
 
-        # Train-test split
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+    # Make predictions
+    predictions = model.predict(X_test)
 
-        # Build the pipeline
-        model = Pipeline(steps=[
-            ('preprocessor', preprocessor),
-            ('regressor', RandomForestRegressor(n_estimators=100, random_state=42))
-        ])
+    # Evaluate the model
+    mse = mean_squared_error(y_test, predictions)
+    st.write(f"Mean Squared Error (MSE): {mse:.2f}")
 
-        # Train the model
-        st.write("Training the model...")
-        model.fit(X_train, y_train)
+    # Visualization: Actual vs Predicted Sales
+    st.subheader("Actual vs Predicted Sales")
+    fig, ax = plt.subplots(figsize=(10, 6))
+    ax.scatter(range(len(y_test)), y_test, color='blue', label='Actual Sales')
+    ax.scatter(range(len(predictions)), predictions, color='red', label='Predicted Sales')
+    ax.set_xlabel('Test Data Index')
+    ax.set_ylabel('Sales')
+    ax.set_title('Sales Prediction with Random Forest')
+    ax.legend()
+    st.pyplot(fig)
 
-        # Make predictions
-        predictions = model.predict(X_test)
+    # Sidebar Filters for Features
+    st.sidebar.header("Interactive Filters")
+    filtered_data = df.copy()
 
-        # Evaluate the model
-        mse = mean_squared_error(y_test, predictions)
-        st.write(f"Mean Squared Error (MSE): {mse:.2f}")
-
-        # Visualization: Actual vs Predicted Sales
-        st.subheader("Actual vs Predicted Sales")
-        fig, ax = plt.subplots(figsize=(10, 6))
-        ax.scatter(range(len(y_test)), y_test, color='blue', label='Actual Sales')
-        ax.scatter(range(len(predictions)), predictions, color='red', label='Predicted Sales')
-        ax.set_xlabel('Test Data Index')
-        ax.set_ylabel('Sales')
-        ax.set_title('Random Forest Sales Prediction')
-        ax.legend()
-        st.pyplot(fig)
-
-        # Sidebar Filters for Features
-        st.sidebar.header("Interactive Filters")
-        filtered_data = df.copy()
-
-        for feature in features:
-            if df[feature].nunique() < 10:  # Display filter for categorical features
-                selected_values = st.sidebar.multiselect(
-                    f"Filter by {feature}",
-                    options=df[feature].unique(),
-                    default=df[feature].unique()
-                )
-                filtered_data = filtered_data[filtered_data[feature].isin(selected_values)]
-
-        st.write("Filtered Data Preview:")
-        st.write(filtered_data.head())
+    for feature in features:
+        if df[feature].nunique() < 10:  # Display filter for categorical features
+            selected_values = st.sidebar.multiselect(
+                f"Filter by {feature}",
+                options=df[feature].unique(),
+                default=df[feature].unique()
+            )
+            filtered_data = filtered_data[filtered_data[feature].isin(selected_values)]

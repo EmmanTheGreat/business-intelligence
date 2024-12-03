@@ -3,6 +3,16 @@ import pandas as pd
 import plost as pl
 import altair as alt
 import pydeck as pdk
+import plotly.express as px
+import numpy as np
+import time
+import folium
+import plotly.graph_objects as go
+from folium import Map
+from folium.plugins import HeatMap
+from geopy.geocoders import Nominatim, GoogleV3
+from geopy.exc import GeocoderTimedOut, GeocoderInsufficientPrivileges
+from streamlit_folium import st_folium
 
 # Configure the page
 st.set_page_config(layout='wide', initial_sidebar_state='expanded')
@@ -126,13 +136,29 @@ if not filtered_data.empty:
     prev_unique_products = filtered_data[filtered_data['Order Date'] < (filtered_data['Order Date'].max() - pd.DateOffset(years=1))]['Product ID'].nunique()
     unique_products_rate = (unique_products - prev_unique_products) / prev_unique_products * 100 if prev_unique_products else 0
 
-    # Display Metrics with Rates
-    col1.metric("Total Sales", f"${total_sales:,.2f}", f"{total_sales_rate:.2f}%")
-    col2.metric("Top Product", top_product, f"{top_product_rate:.2f}%")
-    col3.metric("Top Store", top_store, f"{top_store_rate:.2f}%")
-    col4.metric("Average Sales", f"${avg_sales:,.2f}", f"{avg_sales_rate:.2f}%")
-    col5.metric("Total Transactions", f"{total_transactions}", f"{total_transactions_rate:.2f}%")
-    col6.metric("Unique Products", f"{unique_products}", f"{unique_products_rate:.2f}%")
+    # Creating 3 columns for the first row
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        st.metric("Total Sales", f"${total_sales:,.2f}", f"{total_sales_rate:.2f}%")
+
+    with col2:
+        st.metric("Top Product", top_product, f"{top_product_rate:.2f}%")
+
+    with col3:
+        st.metric("Top Store", top_store, f"{top_store_rate:.2f}%")
+
+    # Creating 3 columns for the second row
+    col4, col5, col6 = st.columns(3)
+
+    with col4:
+        st.metric("Average Sales", f"${avg_sales:,.2f}", f"{avg_sales_rate:.2f}%")
+
+    with col5:
+        st.metric("Total Transactions", f"{total_transactions}", f"{total_transactions_rate:.2f}%")
+
+    with col6:
+        st.metric("Unique Products", f"{unique_products}", f"{unique_products_rate:.2f}%")
 else:
     col1.metric("Total Sales", "N/A")
     col2.metric("Top Product", "N/A")
@@ -147,31 +173,65 @@ st.markdown('<h1 class="visualizations-header">Visualizations</h1>', unsafe_allo
 
 
 # Row B: Heatmap and Donut Chart
-c1, c2 = st.columns((7, 3))
+c1, c2 = st.columns((8, 2))
 
 if not filtered_data.empty:
     with c1:
-        st.markdown('#### Heatmap: Sales Trends')
-        pl.time_hist(
-            data=filtered_data,
-            date='Order Date',
-            x_unit='month',
-            y_unit='day',
-            color=time_hist_color,
-            aggregate='sum',
-            legend=None,
-            height=345,
-            use_container_width=True
-        )
+       # Initialize geolocator
+        geolocator = Nominatim(user_agent="state_coordinates")
+
+        # List of US states (you can replace this with your dataset)
+        states = ["Alabama", "Alaska", "Arizona", "Arkansas", "California", "Colorado", "Connecticut", "Delaware", 
+                "Florida", "Georgia", "Hawaii", "Idaho", "Illinois", "Indiana", "Iowa", "Kansas", "Kentucky", 
+                "Louisiana", "Maine", "Maryland", "Massachusetts", "Michigan", "Minnesota", "Mississippi", "Missouri", 
+                "Montana", "Nebraska", "Nevada", "New Hampshire", "New Jersey", "New Mexico", "New York", "North Carolina", 
+                "North Dakota", "Ohio", "Oklahoma", "Oregon", "Pennsylvania", "Rhode Island", "South Carolina", 
+                "South Dakota", "Tennessee", "Texas", "Utah", "Vermont", "Virginia", "Washington", "West Virginia", 
+                "Wisconsin", "Wyoming"]
+
+        # Create a dictionary to store state names and their corresponding coordinates
+        state_coordinates = {}
+        sales_data = []  # List to store sales data for each state
+
+        # Get coordinates for each state and simulate sales data
+        for state in states:
+            location = geolocator.geocode(f"{state}, United States")
+            if location:
+                state_coordinates[state] = (location.latitude, location.longitude)
+                sales_data.append(np.random.randint(100, 1000))  # Simulating sales data
+            else:
+                state_coordinates[state] = (None, None)
+                sales_data.append(0)
+
+        # Create a DataFrame with state coordinates and sales data
+        df = pd.DataFrame(state_coordinates).T  # Transpose the dictionary to make state names as rows
+        df.columns = ["lat", "lon"]
+        df['Sales'] = sales_data
+
+        # Displaying basic information
+        st.markdown('### US Sales with Heatmap')
+        st.markdown("This heatmap represents the sales data for each state with corresponding coordinates.")
+
+        # Create a base map centered on the average coordinates
+        m = folium.Map(location=[df['lat'].mean(), df['lon'].mean()], zoom_start=5)
+
+        # Prepare data for heatmap (latitude, longitude, and sales data)
+        heat_data = [[row['lat'], row['lon'], row['Sales']] for index, row in df.iterrows()]
+
+        # Add HeatMap to the map
+        HeatMap(heat_data).add_to(m)
+
+        # Display the map in Streamlit
+        st.components.v1.html(m._repr_html_(), width=700, height=500)
 
     with c2:
         st.markdown('#### Donut Chart: Sales Distribution by Store')
         # Ensure only relevant columns are aggregated
-        donut_data = filtered_data.groupby('Postal Code', as_index=False)['Sales'].sum()
+        donut_data = filtered_data.groupby('State', as_index=False)['Sales'].sum()
         pl.donut_chart(
             data=donut_data,
             theta='Sales',
-            color='Postal Code',
+            color='State',
             legend='bottom',
             use_container_width=True
         )
