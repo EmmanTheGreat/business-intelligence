@@ -36,7 +36,7 @@ df = load_data()
 
 # Display dataset in Streamlit
 st.markdown("### Customer Data")
-st.write(df.head(3))  # Display first few rows of the dataset
+st.write(df.head(10))  # Display first few rows of the dataset
 
 # Aggregate data by Customer ID
 customer_data = df.groupby('Customer ID')['Sales'].sum().reset_index()
@@ -75,7 +75,7 @@ st.markdown("### Cluster Details")
 for cluster_num in range(num_clusters):
     st.write(f"**Cluster {cluster_num}:**")
     cluster = customer_data[customer_data['Cluster'] == cluster_num]
-    st.write(cluster[['Customer ID', 'Sales']].head())
+    st.write(cluster[['Customer ID','Sales']].head())
 
 # Preprocess the dataset
 df['Order Date'] = pd.to_datetime(df['Order Date'])  # Convert to datetime
@@ -90,7 +90,7 @@ X = monthly_sales[['Year', 'Month']]
 y = monthly_sales['Sales']
 
 # Streamlit UI elements for interactivity
-st.title("Responsive Sales Prediction with Linear Regression")
+st.title("Sales Prediction with Linear Regression")
 
 # User input for test size
 test_size = st.slider('Select Test Size (%)', min_value=10, max_value=90, value=20, step=5) / 100
